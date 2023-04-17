@@ -40,7 +40,15 @@ def add_recipe():
     recipe_name = input("Enter the recipe name: ")
     ingredients = input("Enter the ingredients separated by commas: ").split(",")
     meal = input("Enter the type of meal: ")
-    prep_time = input("Enter the preparation time (in minutes): ")
+    while True:
+        try:
+            prep_time = int(input("Enter the preparation time (in minutes): "))
+            if prep_time < 0:
+                print("preparation time must be a positive integer")
+                continue
+            break
+        except ValueError:
+            print("Sorry, preparation time must be an integer.")
     cookbook[recipe_name] = {"ingredients": ingredients, "meal": meal, "prep_time": prep_time}
     print(f"{recipe_name} has been added to the cookbook.")
 

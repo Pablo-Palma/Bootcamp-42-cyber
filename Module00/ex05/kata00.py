@@ -1,4 +1,4 @@
-kata = (19, 42, 21)
+kata = (1, 2, 3)
 
-print("The 3 numbers are:", ", ".join(str(i) for i in kata))
+print(f"The {len(kata)} numbers are: " + ", ".join(str(i) for i in kata))
 

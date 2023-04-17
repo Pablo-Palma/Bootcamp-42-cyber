@@ -12,6 +12,10 @@ def text_analyzer(text=None):
         print("AssertionError: argument is not a string")
         return
 
+    if text.isdigit():
+        print("Error: argument should be a string")
+        sys.exit()
+
     upper_count = sum(1 for c in text if c.isupper())
     lower_count = sum(1 for c in text if c.islower())
     punct_count = sum(1 for c in text if c in string.punctuation)

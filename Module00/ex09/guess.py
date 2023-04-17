@@ -15,8 +15,10 @@ while True:
         break
     try:
         guess = int(guess)
+        if guess < 1 or guess > 99:
+            raise ValueError
     except ValueError:
-        print("That's not a number.")
+        print("The number should be between 1 and 99.")
         continue
     attempts += 1
     if guess < secret_number:
