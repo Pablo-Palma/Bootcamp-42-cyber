@@ -8,6 +8,7 @@ import argparse
 import re
 from cryptography.fernet import Fernet
 import getpass
+import qrcode_terminal
 
 interval = 30
 secret_key = ""
@@ -78,3 +79,4 @@ if args.key:
     totp = (struct.unpack(">I", hmac_sha1[offset:offset+4])[0] & 0x7fffffff) % 1000000
     totp_str = str(totp).zfill(6)
     print(totp_str)
+    qrcode_terminal.draw(str(totp_str))
