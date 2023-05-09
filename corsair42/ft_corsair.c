@@ -11,6 +11,8 @@
 #include <openssl/evp.h>
 #include <openssl/pem.h>
 #include <openssl/x509.h>
+#include <openssl/err.h>
+
 void print_decrypted_content(const char *file_path) {
     FILE *file = fopen(file_path, "r");
     if (file == NULL) {
@@ -28,17 +30,7 @@ void print_decrypted_content(const char *file_path) {
     fclose(file);
 }
 
-#include <openssl/err.h>
-
 int decrypt_file(const char *input_file, const char *output_file, RSA *rsa) {
-    // Imprimir la clave privada RSA
-    BIO *bio = BIO_new(BIO_s_mem());
-    PEM_write_bio_RSAPrivateKey(bio, rsa, NULL, NULL, 0, NULL, NULL);
-    char *key_data = NULL;
-    long key_size = BIO_get_mem_data(bio, &key_data);
-    fwrite(key_data, 1, key_size, stdout);
-    BIO_free(bio);
-
     FILE *in = fopen(input_file, "rb");
     if (in == NULL) {
         perror("Error al abrir el archivo de entrada");
@@ -147,16 +139,21 @@ void create_private(const BIGNUM *prime, const BIGNUM *n, const BIGNUM *e, const
     RSA *rsa_private_key = RSA_new();
     RSA_set0_key(rsa_private_key, BN_dup(n), BN_dup(e), d);
 
+    // Construir el nombre del archivo .bin basado en el número del archivo de la clave pública
+    char encrypted_file[1024];
+    strncpy(encrypted_file, input_file, strlen(input_file) - 4);  // Copiar todo excepto la extensión .pem
+    encrypted_file[strlen(input_file) - 4] = '\0'; // Asegurarse de que la cadena termine correctamente
+    strcat(encrypted_file, ".bin");  // Agregar la extensión .bin
+
     // Desencriptar archivo
     char output_file[1024];
-    snprintf(output_file, sizeof(output_file), "%s.decrypted", input_file);
-    if (decrypt_file(input_file, output_file, rsa_private_key)) {
+    snprintf(output_file, sizeof(output_file), "%s.decrypted", encrypted_file);
+    if (decrypt_file(encrypted_file, output_file, rsa_private_key)) {
         printf("Archivo desencriptado: %s\n", output_file);
         print_decrypted_content(output_file);
     } else {
-        printf("Error al desencriptar el archivo: %s\n", input_file);
+        printf("Error al desencriptar el archivo: %s\n", encrypted_file);
     }
-
     // Liberar memoria
     RSA_free(rsa_private_key);
     BN_CTX_free(ctx);
@@ -208,4 +205,3 @@ int main(int argc, char *argv[]) {
 
     return 0;
 }
-
