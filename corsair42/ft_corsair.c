@@ -1,18 +1,18 @@
-#include <stdlib.h>
-#include <stdint.h>
-#include <string.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <stdio.h>
-
-#include <openssl/rsa.h>
-#include <openssl/bn.h>
-#include <openssl/bio.h>
-#include <openssl/evp.h>
-#include <openssl/pem.h>
-#include <openssl/x509.h>
-#include <openssl/err.h>
-
+//#include <stdlib.h>
+//#include <stdint.h>
+//#include <string.h>
+//#include <unistd.h>
+//#include <fcntl.h>
+//#include <stdio.h>
+//
+//#include <openssl/rsa.h>
+//#include <openssl/bn.h>
+//#include <openssl/bio.h>
+//#include <openssl/evp.h>
+//#include <openssl/pem.h>
+//#include <openssl/x509.h>
+//#include <openssl/err.h>
+#include "ft_corsair.h"
 void print_decrypted_content(const char *file_path) {
     FILE *file = fopen(file_path, "r");
     if (file == NULL) {
