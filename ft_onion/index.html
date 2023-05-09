@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<title>Botón con posición cambiante</title>
+	<style>
+		#boton {
+			position: absolute;
+			top: 50%;
+			left: 50%;
+			transform: translate(-50%, -50%);
+		}
+
+		#boton.clicked {
+			position: absolute;
+			top: 10%;
+			left: 10%;
+			transform: none;
+		}
+	</style>
+</head>
+<body>
+	<button id="boton" onclick="cambiarPosicion()">Mover botón</button>
+
+	<script>
+		function cambiarPosicion() {
+			var boton = document.getElementById("boton");
+			boton.classList.toggle("clicked");
+		}
+	</script>
+</body>
+</html>

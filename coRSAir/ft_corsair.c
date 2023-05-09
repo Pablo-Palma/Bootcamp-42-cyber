@@ -1,196 +1,207 @@
-#include <stdlib.h>
-#include <stdint.h>
-#include <string.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <stdio.h>
-
-// Librerías necesarias para este proyecto (OpenSSL)
-#include "openssl/bn.h"
-#include "openssl/rsa.h"
-#include "openssl/bio.h"
-#include "openssl/evp.h"
-#include "openssl/pem.h"
-#include "openssl/x509.h"
-
-#define BUFFER 1024
-
-
-/**
- * Cargar un certificado RSA desde un archivo.
- *
- * @param fichero   Ruta del archivo.
- *
- * @return  Clave RSA cargada.
- */
-RSA *obtener_rsa(char *fichero) {
-    // Definir las variables
-    X509 *cert;                 // Certificado
-    EVP_PKEY *pkey;             // Clave pública
-    RSA *rsa;                   // Clave RSA
-    BIO *bio;                   // Buffer de entrada
-    int correcto;               // Indicador de lectura correcta
-
-    // Inicializar las variables
-    bio = BIO_new(BIO_s_file());                    // Crear el buffer de entrada
-    correcto = BIO_read_filename(bio, fichero);     // Abrir el archivo
-
-    // Comprobar que el fichero se leyó correctamente
-    if (correcto != 1) {
-        printf("Error al leer el fichero '%s'.\n", fichero);
-        exit(1);
+//#include <stdlib.h>
+//#include <stdint.h>
+//#include <string.h>
+//#include <unistd.h>
+//#include <fcntl.h>
+//#include <stdio.h>
+//
+//#include <openssl/rsa.h>
+//#include <openssl/bn.h>
+//#include <openssl/bio.h>
+//#include <openssl/evp.h>
+//#include <openssl/pem.h>
+//#include <openssl/x509.h>
+//#include <openssl/err.h>
+#include "ft_corsair.h"
+void print_decrypted_content(const char *file_path) {
+    FILE *file = fopen(file_path, "r");
+    if (file == NULL) {
+        printf("Error al abrir el archivo: %s\n", file_path);
+        return;
     }
 
-    // Leer el certificado
-    cert = PEM_read_bio_X509(bio, NULL, 0, NULL);   // Leer el certificado
-    pkey = X509_get_pubkey(cert);                   // Obtener la clave pública
-    rsa = EVP_PKEY_get1_RSA(pkey);                  // Obtener la clave RSA
+    printf("Contenido del archivo desencriptado:\n");
+    char buffer[1024];
+    while (fgets(buffer, sizeof(buffer), file) != NULL) {
+        printf("%s", buffer);
+    }
+    printf("\n");
 
-    // Liberar la memoria
-    X509_free(cert);        // Liberar el certificado
-    EVP_PKEY_free(pkey);    // Liberar la clave pública
-    BIO_free(bio);          // Liberar el buffer de entrada
-
-    return rsa;
+    fclose(file);
 }
 
-/**
- * Método principal.
- *
- * @return  0 si correcto.
- */
-int main(int argc, char *argv[]) {
-    // Definir las variables
-    unsigned char *res;     // Buffer para los resultados
-    unsigned char *sol;     // Buffer para la solución
+int decrypt_file(const char *input_file, const char *output_file, RSA *rsa) {
+    FILE *in = fopen(input_file, "rb");
+    if (in == NULL) {
+        perror("Error al abrir el archivo de entrada");
+        return 0;
+    }
 
-    BN_CTX *ctx;        // Contexto para el algoritmo RSA
-    RSA *privada;       // Clave privada RSA
-    BIO *bioprint;      //
-    BIGNUM *one;        // Número '1' en formato 'BIGNUM'
+    FILE *out = fopen(output_file, "wb");
+    if (out == NULL) {
+        perror("Error al abrir el archivo de salida");
+        fclose(in);
+        return 0;
+    }
 
-    RSA *rsa1;          //               ╭ Clave pública
-    BIGNUM *n1;         // Certificado 1 ┼ Número primo 'n'
-    BIGNUM *q1;         //               ╰ Número primo 'q'
+    int rsa_size = RSA_size(rsa);
+    unsigned char *encrypted_buffer = malloc(rsa_size);
+    unsigned char *decrypted_buffer = malloc(rsa_size);
 
-    RSA *rsa2;          //               ╭ Clave pública
-    BIGNUM *n2;         // Certificado 2 ┼ Número primo 'n'
-    BIGNUM *q2;         //               ╰ Número primo 'q'
+    int bytes_read;
+    while ((bytes_read = fread(encrypted_buffer, 1, rsa_size, in)) > 0) {
+        int decrypted_size = RSA_private_decrypt(bytes_read, encrypted_buffer, decrypted_buffer, rsa, RSA_PKCS1_PADDING);
+        if (decrypted_size == -1) {
+            fprintf(stderr, "Error al desencriptar el archivo:\n");
+            ERR_print_errors_fp(stderr);
+            fclose(in);
+            fclose(out);
+            free(encrypted_buffer);
+            free(decrypted_buffer);
+            return 0;
+        }
 
-    BIGNUM *p;          // Número primo 'p' común a los dos certificados
+        fwrite(decrypted_buffer, 1, decrypted_size, out);
+    }
 
-    BIGNUM *total;      // Número total de los dos certificados
-    BIGNUM *fi1;        // Número de factores primos de 'n'
-    BIGNUM *fi2;        // Número de factores primos de 'n'
+    fclose(in);
+    fclose(out);
+    free(encrypted_buffer);
+    free(decrypted_buffer);
+    return 1;
+}
 
-    BIGNUM *e;          // Exponente de la clave pública
-    BIGNUM *d;          // Exponente de la clave privada
+BIGNUM *calculate_private_key(const BIGNUM *p, const BIGNUM *q, const BIGNUM *e) {
+    BIGNUM *phi = BN_new();
+    BIGNUM *p_minus_1 = BN_new();
+    BIGNUM *q_minus_1 = BN_new();
+    BIGNUM *d = BN_new();
+    BN_CTX *ctx = BN_CTX_new();
 
-    int fd;             // Descriptor del archivo de entrada
-    int len;            // Longitud del archivo de entrada
+    // Calcular φ(n) = (p - 1) * (q - 1)
+    BN_sub(p_minus_1, p, BN_value_one());
+    BN_sub(q_minus_1, q, BN_value_one());
+    BN_mul(phi, p_minus_1, q_minus_1, ctx);
 
-    (void) argc;        // Ignorar el parámetro 'argc'
+    // Calcular el inverso multiplicativo de e mod φ(n)
+    BN_mod_inverse(d, e, phi, ctx);
 
-    // Inicializar las variables
-    res = malloc(sizeof(unsigned char) * BUFFER);
-    sol = malloc(sizeof(unsigned char) * BUFFER);
-
-    ctx = BN_CTX_new();
-
-    bioprint = BIO_new_fp(stdout, BIO_NOCLOSE);
-
-    rsa1 = obtener_rsa(argv[1]);
-    rsa2 = obtener_rsa(argv[2]);
-
-    one = BN_new();
-
-    q1 = BN_new();
-    q2 = BN_new();
-
-    p = BN_new();
-    d = BN_new();
-
-    total = BN_new();
-    fi1 = BN_new();
-    fi2 = BN_new();
-
-    privada = RSA_new();
-
-    // Cálculos para obtener los datos
-    n1 = (BIGNUM*) RSA_get0_n(rsa1);    // Obtener 'n' del certificado 1
-    n2 = (BIGNUM*) RSA_get0_n(rsa2);    // Obtener 'n' del certificado 2
-    e = (BIGNUM*) RSA_get0_e(rsa1);     // Obtener 'e' del certificado 1
-
-    BN_gcd(p, n1, n2, ctx);             // Obtener 'p' común a los dos certificados
-    BN_div(q1, NULL, n1, p, ctx);       // Obtener 'q' del certificado 1
-    BN_div(q2, NULL, n2, p, ctx);       // Obtener 'q' del certificado 2
-
-    BN_dec2bn(&one, "1");               // Inicializar 'one' a '1'
-    BN_sub(fi1, q1, one);               // Calcular 'fi1' = 'q1' - '1'
-    BN_sub(fi2, p, one);                // Calcular 'fi2' = 'p' - '1'
-    BN_mul(total, fi1, fi2, ctx);       // Calcular 'total' = 'fi1' * 'fi2'
-    BN_mod_inverse(d, e, total, ctx);   // Calcular 'd' = 'e' ^ -1 (mod 'total')
-
-    // Generar la clave privada
-    RSA_set0_key(privada, n1, e, d);
-
-    // Asociar los números primos a cada RSA
-    RSA_set0_factors(rsa1, p, q1);
-    RSA_set0_factors(rsa2, p, q2);
-
-    // Mostrar los datos de los certificados
-    printf("\nCERTIFICADO 1:\n");
-    RSA_print(bioprint, rsa1, 0);
-    RSA_print(bioprint, privada, 0);
-	printf("n: %s\n", BN_bn2dec(n1));
-	printf("\n");
-	printf("e: %s\n", BN_bn2dec(e));
-	printf("\n");
-	printf("p: %s\n", BN_bn2dec(p));
-	printf("q1: %s\n", BN_bn2dec(q1));
-	printf("\n");
-
-    printf("\nCERTIFICADO 2:\n");
-    RSA_print(bioprint, rsa2, 0);
-    RSA_print(bioprint, privada, 0);
-	printf("n: %s\n", BN_bn2dec(n2));
-	printf("e: %s\n", BN_bn2dec(e));
-	printf("\n");
-	printf("p: %s\n", BN_bn2dec(p));
-	printf("q2: %s\n", BN_bn2dec(q2));
-	printf("\n");
-    // Leer el archivo de entrada y descifrar su contenido
-    fd = open(argv[3], O_RDONLY);
-    len = read(fd, res, BUFFER);
-    RSA_private_decrypt(len, res, sol, privada, RSA_PKCS1_PADDING);
-
-    // Mostrar los datos del fichero
-    printf("\nTexto encriptado:\n");
-    printf("%s\n", res);
-
-    printf("Texto desencriptado:\n");
-    printf("%s\n", sol);
-
-    // Liberar la memoria
-    free(res);
-    free(sol);
-
+    BN_free(phi);
+    BN_free(p_minus_1);
+    BN_free(q_minus_1);
     BN_CTX_free(ctx);
-    BIO_free(bioprint);
 
-    BN_free(one);
-    BN_free(n1);
-    BN_free(q1);
-    BN_free(n2);
-    BN_free(q2);
+    return d;
+}
 
-    BN_free(p);
-    BN_free(d);
-    BN_free(e);
+void get_rsa_modulus_and_exponent(RSA *rsa, const BIGNUM **n, const BIGNUM **e) {
+    RSA_get0_key(rsa, n, e, NULL);
+}
 
-    BN_free(total);
-    BN_free(fi1);
-    BN_free(fi2);
+
+RSA *read_rsa_public_key_from_file(const char *file_path) {
+    FILE *file = fopen(file_path, "r");
+    if (file == NULL) {
+        printf("Error al abrir el archivo: %s\n", file_path);
+        return NULL;
+    }
+
+    RSA *rsa_pub_key = NULL;
+    rsa_pub_key = PEM_read_RSA_PUBKEY(file, &rsa_pub_key, NULL, NULL);
+
+    fclose(file);
+    return rsa_pub_key;
+}
+void create_private(const BIGNUM *prime, const BIGNUM *n, const BIGNUM *e, const char *input_file) {
+    BN_CTX *ctx = BN_CTX_new();
+    BIGNUM *q = BN_new();
+    BIGNUM *rem = BN_new();
+    BIGNUM *phi = BN_new();
+    BIGNUM *d = BN_new();
+
+    // Calcular q = n / p
+    BN_div(q, rem, n, prime, ctx);
+
+    if (!BN_is_zero(rem)) {
+        printf("Error, el certificado no comparte un numero primo\n");
+        return;
+    }
+
+    // Calcular phi = (p - 1) * (q - 1)
+    BN_sub(rem, prime, BN_value_one());
+    BN_sub(phi, q, BN_value_one());
+    BN_mul(phi, rem, phi, ctx);
+
+    // Calcular d = e^(-1) mod phi
+    BN_mod_inverse(d, e, phi, ctx);
+
+    // Crear clave privada RSA
+    RSA *rsa_private_key = RSA_new();
+    RSA_set0_key(rsa_private_key, BN_dup(n), BN_dup(e), d);
+
+    // Construir el nombre del archivo .bin basado en el número del archivo de la clave pública
+    char encrypted_file[1024];
+    strncpy(encrypted_file, input_file, strlen(input_file) - 4);  // Copiar todo excepto la extensión .pem
+    encrypted_file[strlen(input_file) - 4] = '\0'; // Asegurarse de que la cadena termine correctamente
+    strcat(encrypted_file, ".bin");  // Agregar la extensión .bin
+
+    // Desencriptar archivo
+    char output_file[1024];
+    snprintf(output_file, sizeof(output_file), "%s.decrypted", encrypted_file);
+    if (decrypt_file(encrypted_file, output_file, rsa_private_key)) {
+        printf("Archivo desencriptado: %s\n", output_file);
+        print_decrypted_content(output_file);
+    } else {
+        printf("Error al desencriptar el archivo: %s\n", encrypted_file);
+    }
+    // Liberar memoria
+    RSA_free(rsa_private_key);
+    BN_CTX_free(ctx);
+    BN_free(q);
+    BN_free(rem);
+    BN_free(phi);
+}
+
+int main(int argc, char *argv[]) {
+    const BIGNUM    *n1;
+    const BIGNUM    *n2;
+    const BIGNUM *e1;
+    const BIGNUM *e2;
+
+    BIGNUM          *gcd = BN_new();
+    BN_CTX          *ctx = BN_CTX_new();
+    RSA             *rsa_pub_key1;
+    RSA             *rsa_pub_key2;
+
+    if (argc < 3) {
+        printf("Uso: %s <lista de archivos.pem>\n", argv[0]);
+        return 1;
+    }
+
+    for (int i = 1; i < argc; ++i) {
+        for (int j = i + 1; j < argc - 1; ++j) {
+            rsa_pub_key1 = read_rsa_public_key_from_file(argv[i]);
+            rsa_pub_key2 = read_rsa_public_key_from_file(argv[j]);
+           if (rsa_pub_key1 == NULL || rsa_pub_key2 == NULL) {
+                printf("Error al leer las claves públicas RSA.\n");
+                return 1;
+            }
+            get_rsa_modulus_and_exponent(rsa_pub_key1, &n1, &e1);
+            get_rsa_modulus_and_exponent(rsa_pub_key2, &n2, &e2);
+
+            BN_gcd(gcd, n1, n2, ctx);
+            if (!BN_is_one(gcd)) {
+                printf("Primos coincidentes con %s y %s\n", argv[i], argv[j]);
+                create_private(gcd, n1, e1, argv[i]);
+                create_private(gcd, n2, e2,  argv[j]);
+            }
+            RSA_free(rsa_pub_key1);
+            RSA_free(rsa_pub_key2);
+        }
+    } 
+
+    BN_free(gcd);
+    BN_CTX_free(ctx);
 
     return 0;
 }
